@@ -12,6 +12,7 @@
 package excelize
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/binary"
 	"encoding/xml"
@@ -125,11 +126,18 @@ func (f *File) WriteTo(w io.Writer, opts ...Options) (int64, error) {
 			return 0, err
 		}
 	}
-	buf, err := f.WriteToBuffer()
-	if err != nil {
+
+	if f.options != nil && f.options.Password != "" {
+		buf, err := f.WriteToBuffer()
+		if err != nil {
+			return 0, err
+		}
+		return buf.WriteTo(w)
+	}
+	if err := f.writeDirectToWriter(w); err != nil {
 		return 0, err
 	}
-	return buf.WriteTo(w)
+	return 0, nil
 }
 
 // WriteToBuffer provides a function to get bytes.Buffer from the saved file,
@@ -155,6 +163,16 @@ func (f *File) WriteToBuffer() (*bytes.Buffer, error) {
 		buf.Write(b)
 	}
 	return buf, nil
+}
+
+// writeDirectToWriter provides a function to write to io.Writer.
+func (f *File) writeDirectToWriter(w io.Writer) error {
+	zw := zip.NewWriter(w)
+	if err := f.writeToZip(zw); err != nil {
+		_ = zw.Close()
+		return err
+	}
+	return zw.Close()
 }
 
 // writeToZip provides a function to write to ZipWriter.
